@@ -1,0 +1,10 @@
+
+BG_DARK      = "#1e1e2e"
+BG_CARD      = "#181825"
+FG_HEADER    = "#cdd6f4"
+FG_MUTED     = "#a6adc8"
+FG_EMPTY     = "#585b70"
+BAR_BG       = "#313244"
+COLOR_GREEN  = "#a6e3a1"
+COLOR_YELLOW = "#f9e2af"
+COLOR_RED    = "#f38ba8"
