@@ -1,7 +1,4 @@
-from application_context import ApplicationContext
-from process_checker import ProcessChecker
+from src.applicationContext import ApplicationContext
+from src.ui.monitorWindow import MonitorWindow
 
-applicationContext = ApplicationContext()
-processChecker = ProcessChecker.workingWith(applicationContext)
-
-processChecker.startChecking(applicationContext.loadedProcess())
+MonitorWindow(ApplicationContext()).mainloop()
