@@ -7,8 +7,10 @@ import tkinter as tk
 from typing import Callable
 
 from src.ui.palette import BG_DARK, BG_CARD, BAR_BG, FG_HEADER, FG_MUTED, COLOR_RED
-from src.ui.widgets import addRadioGroup, addColorPickerRow, addSliderRow
+from src.ui.widgets import addRadioGroup, addColorPickerRow, addSliderRow, addFontPickerRow
 from src.ui import gaugeColors
+
+FIXED_SIM_RESOLUTION = 10
 
 NAV_WIDTH = 128
 CONTENT_WIDTH = 300
@@ -18,12 +20,18 @@ SIDE_GAP = 14
 
 class SettingsDialog:
     def __init__(self, owner: tk.Tk, context, onChange: Callable[[], None],
-                 getDemoMode: Callable[[], bool], setDemoMode: Callable[[bool], None]) -> None:
+                 getDemoMode: Callable[[], bool], setDemoMode: Callable[[bool], None],
+                 startHoldRev: Callable[[], None], stopHoldRev: Callable[[], None],
+                 getFixedSim: Callable[[], tuple[bool, int]], setFixedSim: Callable[[bool, int], None]) -> None:
         self._owner = owner
         self._context = context
         self._onChange = onChange
         self._getDemoMode = getDemoMode
         self._setDemoMode = setDemoMode
+        self._startHoldRev = startHoldRev
+        self._stopHoldRev = stopHoldRev
+        self._getFixedSim = getFixedSim
+        self._setFixedSim = setFixedSim
         self._window: tk.Toplevel | None = None
         self._navButtons: dict[str, tk.Button] = {}
         self._tabFrames: dict[str, tk.Frame] = {}
@@ -117,10 +125,6 @@ class SettingsDialog:
             popup, text="Configuración", bg=BG_DARK, fg=FG_HEADER,
             font=("Consolas", 12, "bold"), anchor="w", padx=14, pady=10,
         ).pack(fill="x")
-        tk.Label(
-            popup, text="Los cambios se previsualizan al instante; usá Guardar para conservarlos.",
-            bg=BG_DARK, fg=FG_MUTED, font=("Consolas", 8), anchor="w", padx=14, justify="left", wraplength=CONTENT_WIDTH + NAV_WIDTH - 20,
-        ).pack(fill="x", pady=(0, 6))
         tk.Frame(popup, bg=BAR_BG, height=1).pack(fill="x")
 
         self._buildFooter(popup)
@@ -190,12 +194,15 @@ class SettingsDialog:
             disenoFrame, "Números", lambda: gaugeColors.resolvedNumberColor(context),
             context.numberColor, context.setNumberColor, self._onChange, popup,
         )
+        addFontPickerRow(
+            disenoFrame, "Fuente", context.fontFamily, context.setFontFamily, self._onChange,
+        )
 
         agujaFrame = tk.Frame(content, bg=BG_DARK)
         self._sectionTitle(agujaFrame, "Aguja")
         addRadioGroup(
             agujaFrame, needleVar,
-            (("classic", "Clásica"), ("sport", "Deportiva"), ("twin", "Doble riel"), ("line", "Línea")),
+            (("classic", "Clásica"), ("sport", "Deportiva"), ("twin", "Doble riel"), ("line", "Línea"), ("slim", "Fina (moto)")),
             applyNeedle,
         )
         addColorPickerRow(
@@ -331,4 +338,36 @@ class SettingsDialog:
             bg=BG_DARK, fg=FG_HEADER, selectcolor=BG_CARD, activebackground=BG_DARK,
             activeforeground=FG_HEADER, font=("Consolas", 9), anchor="w", padx=14,
             highlightthickness=0,
+        ).pack(fill="x")
+
+        holdBtn = tk.Button(
+            parent, text="Mantener para aumentar GDIs", bg=BG_CARD, fg=FG_HEADER,
+            activebackground=BG_CARD, activeforeground=FG_HEADER, font=("Consolas", 9),
+            relief="flat", padx=8, pady=6,
+        )
+        holdBtn.pack(fill="x", padx=14, pady=(10, 6))
+        holdBtn.bind("<ButtonPress-1>", lambda e: self._startHoldRev())
+        holdBtn.bind("<ButtonRelease-1>", lambda e: self._stopHoldRev())
+
+        fixedActive, fixedValue = self._getFixedSim()
+        fixedActiveVar = tk.BooleanVar(value=fixedActive)
+        fixedValueVar = tk.IntVar(value=fixedValue)
+
+        def applyFixed(_=None) -> None:
+            self._setFixedSim(fixedActiveVar.get(), fixedValueVar.get())
+
+        tk.Checkbutton(
+            parent, text="Fijar en un valor", variable=fixedActiveVar, command=applyFixed,
+            bg=BG_DARK, fg=FG_HEADER, selectcolor=BG_CARD, activebackground=BG_DARK,
+            activeforeground=FG_HEADER, font=("Consolas", 9), anchor="w", padx=14,
+            highlightthickness=0,
+        ).pack(fill="x", pady=(12, 0))
+
+        fixedRow = tk.Frame(parent, bg=BG_DARK)
+        fixedRow.pack(fill="x", padx=14)
+        tk.Scale(
+            fixedRow, from_=0, to=self._context.gdiMax(), resolution=FIXED_SIM_RESOLUTION,
+            orient="horizontal", variable=fixedValueVar, command=applyFixed,
+            bg=BG_DARK, fg=FG_HEADER, troughcolor=BG_CARD, highlightthickness=0,
+            activebackground=BG_CARD, font=("Consolas", 8), showvalue=True,
         ).pack(fill="x")

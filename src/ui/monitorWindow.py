@@ -9,8 +9,12 @@ from src.core.processChecker import ProcessChecker
 
 DEMO_STEP = 0.02  # fraction of gdiMax the simulated needle advances per tick
 DEMO_INTERVAL_MS = 120
+HOLD_INTERVAL_MS = 60
+GEOMETRY_SAVE_DELAY_MS = 600
 BARS_VIEW_MINSIZE = (280, 100)
-GAUGE_VIEW_MINSIZE = (300, 300)  # square, so it doesn't fight the single-gauge square enforcement
+GAUGE_VIEW_MINSIZE = (140, 140)  # square, so it doesn't fight the single-gauge square enforcement
+HOLD_STEP = 0.03  # fraction of gdiMax the held-rev simulation advances per tick while held
+HOLD_DECAY_STEP = 0.015  # fraction of gdiMax the held-rev simulation falls per tick after release
 
 
 class MonitorWindow(tk.Tk):
@@ -22,6 +26,12 @@ class MonitorWindow(tk.Tk):
         self._demoMode = False
         self._demoPct = 0.0
         self._demoDirection = 1
+        self._holdRevActive = False
+        self._holdRevPressed = False
+        self._holdRevPct = 0.0
+        self._fixedSimActive = False
+        self._fixedSimValue = 0
+        self._geometrySaveAfterId: str | None = None
 
         self.title("GDI Monitor")
         self.attributes("-topmost", True)
@@ -31,24 +41,31 @@ class MonitorWindow(tk.Tk):
 
         self._aspectLocked = False
         self._resizeGuard = False
+        self._compactMode = False
 
         self._settingsDialog = SettingsDialog(
             self, self._context, onChange=self._refresh,
             getDemoMode=lambda: self._demoMode, setDemoMode=self._setDemoMode,
+            startHoldRev=self._startHoldRev, stopHoldRev=self._stopHoldRev,
+            getFixedSim=lambda: (self._fixedSimActive, self._fixedSimValue), setFixedSim=self._setFixedSim,
         )
 
         self._buildUI()
+        savedGeometry = self._context.windowGeometry()
+        if savedGeometry:
+            self.geometry(savedGeometry)
         self.bind("<Configure>", self._onConfigure)
+        self.protocol("WM_DELETE_WINDOW", self._onClose)
         self.after(0, self._refresh)
 
     # ── UI construction ───────────────────────────────────────────────────────
 
     def _buildUI(self) -> None:
-        header = tk.Frame(self, bg=BG_DARK)
-        header.pack(fill="x")
+        self._header = tk.Frame(self, bg=BG_DARK)
+        self._header.pack(fill="x")
 
         tk.Label(
-            header,
+            self._header,
             text="GDI Monitor",
             bg=BG_DARK, fg=FG_HEADER,
             font=("Consolas", 11, "bold"),
@@ -56,7 +73,7 @@ class MonitorWindow(tk.Tk):
         ).pack(side="left", fill="x", expand=True)
 
         tk.Button(
-            header, text="⚙", command=self._settingsDialog.open,
+            self._header, text="⚙", command=self._settingsDialog.open,
             bg=BG_DARK, fg=FG_MUTED, activebackground=BG_CARD, activeforeground=FG_HEADER,
             font=("Consolas", 11), relief="flat", bd=0, padx=10, cursor="hand2",
         ).pack(side="right", padx=(0, 8))
@@ -72,16 +89,58 @@ class MonitorWindow(tk.Tk):
         )
         self._footer.pack(fill="x")
 
+        # Floating gear used instead of the header in compact mode, so it costs no layout space.
+        self._overlayGear = tk.Button(
+            self, text="⚙", command=self._settingsDialog.open,
+            bg=BG_DARK, fg=FG_MUTED, activebackground=BG_CARD, activeforeground=FG_HEADER,
+            font=("Consolas", 9), relief="flat", bd=0, padx=4, pady=1, cursor="hand2",
+        )
+
+    def _setCompactMode(self, compact: bool) -> None:
+        """Compact mode drops the title bar/footer/card header so a single round gauge
+        can fill almost the entire window, keeping only a tiny floating gear button."""
+        if compact == self._compactMode:
+            return
+        self._compactMode = compact
+        if compact:
+            self._header.pack_forget()
+            self._footer.pack_forget()
+            self._body.pack_configure(padx=1, pady=1)
+            self._overlayGear.place(relx=1.0, rely=0.0, x=-2, y=2, anchor="ne")
+            self._overlayGear.lift()
+        else:
+            self._overlayGear.place_forget()
+            self._body.pack_configure(padx=10, pady=(0, 4))
+            self._header.pack(fill="x")
+            self._footer.pack(fill="x")
+
     def _setDemoMode(self, enabled: bool) -> None:
         self._demoMode = enabled
         self._demoPct = 0.0
         self._demoDirection = 1
         self._refresh()
 
-    def _renderProcess(self, process: Process, count: int) -> None:
+    def _startHoldRev(self) -> None:
+        """Simulates holding the throttle down: RPM climbs while pressed and, once
+        released, keeps ticking on its own until it decays back down to zero."""
+        self._holdRevPressed = True
+        if not self._holdRevActive:
+            self._holdRevActive = True
+            self._holdRevPct = 0.0
+            self._refresh()
+
+    def _stopHoldRev(self) -> None:
+        self._holdRevPressed = False
+
+    def _setFixedSim(self, active: bool, value: int) -> None:
+        self._fixedSimActive = active
+        self._fixedSimValue = value
+        self._refresh()
+
+    def _renderProcess(self, process: Process, count: int, compact: bool) -> None:
         if self._context.viewStyle() == "gauge":
             self.minsize(*GAUGE_VIEW_MINSIZE)
-            cards.renderGaugeCard(self._body, process, count, self._context)
+            cards.renderGaugeCard(self._body, process, count, self._context, compact=compact)
         else:
             self.minsize(*BARS_VIEW_MINSIZE)
             cards.renderBarCard(self._body, process, count, self._context)
@@ -99,7 +158,10 @@ class MonitorWindow(tk.Tk):
             self._squareTo(min(self.winfo_width(), self.winfo_height()))
 
     def _onConfigure(self, event: tk.Event) -> None:
-        if event.widget is not self or not self._aspectLocked or self._resizeGuard:
+        if event.widget is not self:
+            return
+        self._scheduleGeometrySave()
+        if not self._aspectLocked or self._resizeGuard:
             return
         if event.width == event.height:
             return
@@ -113,6 +175,22 @@ class MonitorWindow(tk.Tk):
     def _clearResizeGuard(self) -> None:
         self._resizeGuard = False
 
+    def _scheduleGeometrySave(self) -> None:
+        if self._geometrySaveAfterId is not None:
+            self.after_cancel(self._geometrySaveAfterId)
+        self._geometrySaveAfterId = self.after(GEOMETRY_SAVE_DELAY_MS, self._saveGeometry)
+
+    def _saveGeometry(self) -> None:
+        self._geometrySaveAfterId = None
+        self._context.setWindowGeometry(self.geometry())
+
+    def _onClose(self) -> None:
+        if self._geometrySaveAfterId is not None:
+            self.after_cancel(self._geometrySaveAfterId)
+            self._geometrySaveAfterId = None
+        self._saveGeometry()
+        self.destroy()
+
     # ── Refresh loop ──────────────────────────────────────────────────────────
 
     def _refresh(self) -> None:
@@ -123,8 +201,17 @@ class MonitorWindow(tk.Tk):
         for widget in self._body.winfo_children():
             widget.destroy()
 
-        results = self._demoResults() if self._demoMode else self._checker.checkAll()
-        self._applyAspectLock(len(results) == 1 and self._context.viewStyle() == "gauge")
+        if self._holdRevActive:
+            results = self._holdRevResults()
+        elif self._fixedSimActive:
+            results = self._fixedSimResults()
+        elif self._demoMode:
+            results = self._demoResults()
+        else:
+            results = self._checker.checkAll()
+        singleGauge = len(results) == 1 and self._context.viewStyle() == "gauge"
+        self._applyAspectLock(singleGauge)
+        self._setCompactMode(singleGauge)
 
         if not results:
             tk.Label(
@@ -135,9 +222,15 @@ class MonitorWindow(tk.Tk):
             ).pack()
         else:
             for process, count in results:
-                self._renderProcess(process, count)
+                self._renderProcess(process, count, singleGauge)
 
-        if self._demoMode:
+        if self._holdRevActive:
+            self._footer.config(text="modo de prueba · mantené presionado para acelerar")
+            self._afterId = self.after(HOLD_INTERVAL_MS, self._refresh)
+        elif self._fixedSimActive:
+            self._footer.config(text="modo de prueba · valor fijo simulado")
+            self._afterId = None
+        elif self._demoMode:
             self._footer.config(text="modo de prueba · valores simulados")
             self._afterId = self.after(DEMO_INTERVAL_MS, self._refresh)
         else:
@@ -158,3 +251,17 @@ class MonitorWindow(tk.Tk):
         fakeProcess = Process.composedOf(name="demo.exe", pid=0, exe="demo.exe", description="Vista previa (simulado)")
         count = int(self._context.gdiMax() * self._demoPct)
         return [(fakeProcess, count)]
+
+    def _holdRevResults(self) -> list[tuple[Process, int]]:
+        step = HOLD_STEP if self._holdRevPressed else -HOLD_DECAY_STEP
+        self._holdRevPct = max(0.0, min(1.0, self._holdRevPct + step))
+        if not self._holdRevPressed and self._holdRevPct <= 0.0:
+            self._holdRevActive = False
+
+        fakeProcess = Process.composedOf(name="demo.exe", pid=0, exe="demo.exe", description="Vista previa (simulado)")
+        count = int(self._context.gdiMax() * self._holdRevPct)
+        return [(fakeProcess, count)]
+
+    def _fixedSimResults(self) -> list[tuple[Process, int]]:
+        fakeProcess = Process.composedOf(name="demo.exe", pid=0, exe="demo.exe", description="Vista previa (simulado)")
+        return [(fakeProcess, self._fixedSimValue)]

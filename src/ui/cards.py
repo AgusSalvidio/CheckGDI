@@ -76,14 +76,16 @@ def drawBar(canvas: tk.Canvas, fillPct: float, color: str, showPercentage: bool)
         canvas.create_text(cx, cy, text=label, fill="#cdd6f4", font=("Consolas", 8, "bold"), anchor="center")
 
 
-def renderGaugeCard(body: tk.Widget, process: Process, count: int, context) -> None:
-    card = tk.Frame(body, bg=BG_CARD, padx=10, pady=6)
-    card.pack(fill="both", expand=True, pady=3)
+def renderGaugeCard(body: tk.Widget, process: Process, count: int, context, compact: bool = False) -> None:
+    pad = 0 if compact else 10
+    card = tk.Frame(body, bg=BG_CARD, padx=pad, pady=(0 if compact else 6))
+    card.pack(fill="both", expand=True, pady=(0 if compact else 3))
 
-    _renderCardHeader(card, process)
+    if not compact:
+        _renderCardHeader(card, process)
 
     gaugeArea = tk.Frame(card, bg=BG_CARD)
-    gaugeArea.pack(fill="both", expand=True, pady=(8, 2))
+    gaugeArea.pack(fill="both", expand=True, pady=(0, 0) if compact else (8, 2))
 
     # relwidth/relheight keep the canvas exactly the size of its container at all times —
     # no manual re-placement needed, so there's no risk of it lagging or going stale.
@@ -112,5 +114,5 @@ def drawGauge(canvas: tk.Canvas, width: int, height: int, count: int, context) -
         context.gaugeStyle(), context.needleStyle(),
         context.needleColor(), context.zoneMode(),
         context.accentColor(), context.numberColor(), context.dialColor(),
-        context.needleThickness(),
+        context.needleThickness(), context.fontFamily(),
     )

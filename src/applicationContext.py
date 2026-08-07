@@ -11,7 +11,7 @@ from src.core.process import Process
 # switches profiles. `viewStyle` is intentionally excluded — it's global, not per-profile.
 PROFILE_FIELDS = (
     "gaugeStyle", "needleStyle", "needleColor", "zoneMode",
-    "accentColor", "numberColor", "dialColor", "needleThickness",
+    "accentColor", "numberColor", "dialColor", "needleThickness", "fontFamily",
 )
 
 
@@ -25,6 +25,7 @@ class ApplicationContext:
         # overridden by whatever profiles/selection were last persisted from the UI (if any)
         saved = self._settingsStore.load()
         self._viewStyle = saved.get("viewStyle", self._configManager.viewStyle())
+        self._windowGeometry = saved.get("windowGeometry")
 
         defaultProfile = {field: getattr(self._configManager, field)() for field in PROFILE_FIELDS}
 
@@ -34,6 +35,12 @@ class ApplicationContext:
             self._profiles["Default"] = {
                 field: saved.get(field, defaultProfile[field]) for field in PROFILE_FIELDS
             }
+        else:
+            # Backfill any field added after a profile was saved (e.g. fontFamily) so older
+            # settings files don't blow up on a missing key.
+            for profileValues in self._profiles.values():
+                for field in PROFILE_FIELDS:
+                    profileValues.setdefault(field, defaultProfile[field])
 
         self._activeProfile = saved.get("activeProfile", next(iter(self._profiles)))
         if self._activeProfile not in self._profiles:
@@ -154,6 +161,18 @@ class ApplicationContext:
         self._viewStyle = viewStyle
         self._persistSettings()
 
+    def windowGeometry(self) -> str | None:
+        return self._windowGeometry
+
+    def setWindowGeometry(self, geometry: str) -> None:
+        """Persisted independently of the edit session/profiles, always straight to disk,
+        merged on top of whatever is currently saved there (not the in-memory state) so an
+        in-progress, uncommitted settings edit never leaks to disk via a window resize."""
+        self._windowGeometry = geometry
+        onDisk = self._settingsStore.load()
+        onDisk["windowGeometry"] = geometry
+        self._settingsStore.save(onDisk)
+
     def gaugeStyle(self) -> str:
         return self._field("gaugeStyle")
 
@@ -195,6 +214,12 @@ class ApplicationContext:
 
     def setDialColor(self, dialColor: str) -> None:
         self._setField("dialColor", dialColor)
+
+    def fontFamily(self) -> str:
+        return self._field("fontFamily")
+
+    def setFontFamily(self, fontFamily: str) -> None:
+        self._setField("fontFamily", fontFamily)
 
     def needleThickness(self) -> float:
         return self._field("needleThickness")
