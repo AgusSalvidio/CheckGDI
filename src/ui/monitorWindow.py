@@ -3,6 +3,7 @@ import tkinter as tk
 
 from src.ui.palette import BG_DARK, BG_CARD, FG_HEADER, FG_MUTED, FG_EMPTY
 from src.ui import cards
+from src.ui import gaugeWidget
 from src.ui.settingsDialog import SettingsDialog
 from src.core.process import Process
 from src.core.processChecker import ProcessChecker
@@ -13,6 +14,7 @@ HOLD_INTERVAL_MS = 60
 GEOMETRY_SAVE_DELAY_MS = 600
 BARS_VIEW_MINSIZE = (280, 100)
 GAUGE_VIEW_MINSIZE = (140, 140)  # square, so it doesn't fight the single-gauge square enforcement
+RECT_GAUGE_VIEW_MINSIZE = (280, 120)  # wide horizontal band styles (e.g. jdm), no aspect lock
 HOLD_STEP = 0.03  # fraction of gdiMax the held-rev simulation advances per tick while held
 HOLD_DECAY_STEP = 0.015  # fraction of gdiMax the held-rev simulation falls per tick after release
 
@@ -139,7 +141,10 @@ class MonitorWindow(tk.Tk):
 
     def _renderProcess(self, process: Process, count: int, compact: bool) -> None:
         if self._context.viewStyle() == "gauge":
-            self.minsize(*GAUGE_VIEW_MINSIZE)
+            if gaugeWidget.isRectangularStyle(self._context.gaugeStyle()):
+                self.minsize(*RECT_GAUGE_VIEW_MINSIZE)
+            else:
+                self.minsize(*GAUGE_VIEW_MINSIZE)
             cards.renderGaugeCard(self._body, process, count, self._context, compact=compact)
         else:
             self.minsize(*BARS_VIEW_MINSIZE)
@@ -210,7 +215,8 @@ class MonitorWindow(tk.Tk):
         else:
             results = self._checker.checkAll()
         singleGauge = len(results) == 1 and self._context.viewStyle() == "gauge"
-        self._applyAspectLock(singleGauge)
+        squareLock = singleGauge and not gaugeWidget.isRectangularStyle(self._context.gaugeStyle())
+        self._applyAspectLock(squareLock)
         self._setCompactMode(singleGauge)
 
         if not results:

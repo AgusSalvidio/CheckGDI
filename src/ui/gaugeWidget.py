@@ -7,6 +7,13 @@ from src.ui.palette import (
     GAUGE_TICK, GAUGE_NUMBER, GAUGE_HUB, GAUGE_HUB_RING,
     GAUGE_NEEDLE, GAUGE_NEEDLE_TAIL, GAUGE_NEEDLE_ACCENT, GAUGE_REDZONE, GAUGE_YELLOWZONE,
     GAUGE_RETRO_FACE, GAUGE_RETRO_BEZEL, GAUGE_RETRO_TICK, GAUGE_RETRO_NUMBER, GAUGE_RETRO_NEEDLE,
+    GAUGE_VEGLIA_FACE, GAUGE_VEGLIA_BEZEL, GAUGE_VEGLIA_TICK, GAUGE_VEGLIA_NUMBER, GAUGE_VEGLIA_NEEDLE,
+    GAUGE_FERRARI_FACE, GAUGE_FERRARI_TICK, GAUGE_FERRARI_NUMBER, GAUGE_FERRARI_NEEDLE,
+    GAUGE_ASTON_FACE, GAUGE_ASTON_BEZEL_LIGHT, GAUGE_ASTON_BEZEL_DARK, GAUGE_ASTON_TICK,
+    GAUGE_ASTON_NUMBER, GAUGE_ASTON_NEEDLE,
+    GAUGE_JDM_BG, GAUGE_JDM_BAR_LIT, GAUGE_JDM_BAR_UNLIT, GAUGE_JDM_NUMBER,
+    GAUGE_TELEMETRY_BG, GAUGE_TELEMETRY_BAR_LOW, GAUGE_TELEMETRY_BAR_MID, GAUGE_TELEMETRY_BAR_HIGH,
+    GAUGE_TELEMETRY_BAR_UNLIT, GAUGE_TELEMETRY_LED_ON, GAUGE_TELEMETRY_LED_OFF, GAUGE_TELEMETRY_NUMBER,
     GAUGE_DIGITAL_BG, GAUGE_DIGITAL_TRACK, GAUGE_DIGITAL_LABEL,
     COLOR_GREEN, COLOR_YELLOW, COLOR_RED,
 )
@@ -24,8 +31,8 @@ def _point(cx: float, cy: float, radius: float, angleDeg: float) -> tuple[float,
     return cx + radius * math.cos(rad), cy + radius * math.sin(rad)
 
 
-def _angleFor(pct: float) -> float:
-    return ANGLE_START + max(0.0, min(pct, 1.0)) * ANGLE_SWEEP
+def _angleFor(pct: float, angleStart: float = ANGLE_START, angleSweep: float = ANGLE_SWEEP) -> float:
+    return angleStart + max(0.0, min(pct, 1.0)) * angleSweep
 
 
 def _hexToRgb(color: str) -> tuple[int, int, int]:
@@ -110,14 +117,15 @@ def _drawTicksAndNumbers(canvas: tk.Canvas, cx: float, cy: float, faceRadius: fl
                            tickColor: str, numberColor: str, fontFamily: str, thin: bool = False,
                            warnThreshold: int | None = None, criticalThreshold: int | None = None,
                            zoneMode: str = "multicolor", warnColor: str = "", criticalColor: str = "",
-                           accentColor: str = "") -> None:
+                           accentColor: str = "", angleStart: float = ANGLE_START,
+                           angleSweep: float = ANGLE_SWEEP) -> None:
     majorStep = max(gdiMax // 10, 1)
     minorDivisions = 10  # each minor tick is 1/10th of a major step (100 GDIs when major = 1000)
     majorWidth = 2 if thin else 3
     tick = 0
     while tick <= gdiMax:
         pct = tick / gdiMax
-        angle = _angleFor(pct)
+        angle = _angleFor(pct, angleStart, angleSweep)
         color = _tickZoneColor(tick, tickColor, warnThreshold, criticalThreshold, zoneMode, warnColor, criticalColor, accentColor)
         outer = _point(cx, cy, faceRadius * 0.98, angle)
         inner = _point(cx, cy, faceRadius * 0.86, angle)
@@ -133,7 +141,7 @@ def _drawTicksAndNumbers(canvas: tk.Canvas, cx: float, cy: float, faceRadius: fl
             for m in range(1, minorDivisions):
                 minorValue = tick + majorStep * m / minorDivisions
                 minorPct = minorValue / gdiMax
-                mAngle = _angleFor(minorPct)
+                mAngle = _angleFor(minorPct, angleStart, angleSweep)
                 mColor = _tickZoneColor(minorValue, tickColor, warnThreshold, criticalThreshold, zoneMode, warnColor, criticalColor, accentColor)
                 mOuter = _point(cx, cy, faceRadius * 0.98, mAngle)
                 mInner = _point(cx, cy, faceRadius * 0.92, mAngle)
@@ -279,6 +287,8 @@ class AnalogGaugeSpec:
     labelYRatio: float
     labelFontRatio: float
     numberFontRatio: float = 0.13
+    angleStart: float = ANGLE_START  # where the minimum value sits (0°=3 o'clock, clockwise)
+    angleSweep: float = ANGLE_SWEEP  # total arc from minimum to maximum value
 
 
 ANALOG_GAUGE_SPECS: dict[str, AnalogGaugeSpec] = {
@@ -298,6 +308,36 @@ ANALOG_GAUGE_SPECS: dict[str, AnalogGaugeSpec] = {
         hubRingColor=GAUGE_RETRO_BEZEL, hubCapColor=GAUGE_RETRO_TICK,
         labelText="GDI x1000", labelYRatio=0.24, labelFontRatio=0.08, numberFontRatio=0.12,
     ),
+    "veglia": AnalogGaugeSpec(
+        bezelLight=GAUGE_VEGLIA_BEZEL, bezelDark=GAUGE_BEZEL_INNER, bezelRings=14,
+        faceRadiusRatio=0.95, faceColor=GAUGE_VEGLIA_FACE, innerRingColor=GAUGE_VEGLIA_TICK,
+        tickColor=GAUGE_VEGLIA_TICK, numberColor=GAUGE_VEGLIA_NUMBER, fontFamily="Bahnschrift", thinTicks=True,
+        needleColor=GAUGE_VEGLIA_NEEDLE, needleTailColor=GAUGE_VEGLIA_TICK, needleLengthRatio=0.98,
+        hubRingColor=GAUGE_VEGLIA_TICK, hubCapColor=GAUGE_HUB,
+        labelText="GDI\nx100", labelYRatio=0.30, labelFontRatio=0.075, numberFontRatio=0.12,
+        # Same 270° sweep as classic, but rotated so 0 sits at 3 o'clock (gap moves to top-right).
+        angleStart=0.0, angleSweep=270.0,
+    ),
+    "ferrari": AnalogGaugeSpec(
+        bezelLight=GAUGE_BEZEL_OUTER, bezelDark=GAUGE_BEZEL_INNER, bezelRings=14,
+        faceRadiusRatio=0.95, faceColor=GAUGE_FERRARI_FACE, innerRingColor=None,
+        tickColor=GAUGE_FERRARI_TICK, numberColor=GAUGE_FERRARI_NUMBER, fontFamily="Arial Black", thinTicks=False,
+        needleColor=GAUGE_FERRARI_NEEDLE, needleTailColor=GAUGE_FERRARI_NEEDLE, needleLengthRatio=0.98,
+        hubRingColor=GAUGE_HUB_RING, hubCapColor=GAUGE_HUB,
+        labelText="GDI\nx1000", labelYRatio=0.20, labelFontRatio=0.07, numberFontRatio=0.12,
+        # Wider sweep than classic, 0 sits exactly at 6 o'clock (dead-bottom).
+        angleStart=90.0, angleSweep=280.0,
+    ),
+    "aston": AnalogGaugeSpec(
+        bezelLight=GAUGE_ASTON_BEZEL_LIGHT, bezelDark=GAUGE_ASTON_BEZEL_DARK, bezelRings=14,
+        faceRadiusRatio=0.95, faceColor=GAUGE_ASTON_FACE, innerRingColor=GAUGE_ASTON_BEZEL_DARK,
+        tickColor=GAUGE_ASTON_TICK, numberColor=GAUGE_ASTON_NUMBER, fontFamily="Trebuchet MS", thinTicks=True,
+        needleColor=GAUGE_ASTON_NEEDLE, needleTailColor=GAUGE_ASTON_NEEDLE, needleLengthRatio=0.98,
+        hubRingColor=GAUGE_ASTON_BEZEL_LIGHT, hubCapColor="#1c1c1e",
+        labelText="RPM\nX1000", labelYRatio=0.28, labelFontRatio=0.065, numberFontRatio=0.12,
+        # Reference dial sweeps counter-clockwise (numbers increase to the left of the gap).
+        angleStart=135.0, angleSweep=-270.0,
+    ),
 }
 _DEFAULT_ANALOG_STYLE = "classic"
 
@@ -311,17 +351,25 @@ def defaultNeedleColor(gaugeStyle: str) -> str:
 
 
 def defaultNumberColor(gaugeStyle: str) -> str:
+    if gaugeStyle == "jdm":
+        return GAUGE_JDM_NUMBER
+    if gaugeStyle == "telemetry":
+        return GAUGE_TELEMETRY_NUMBER
     return _analogSpec(gaugeStyle).numberColor
 
 
 def defaultDialColor(gaugeStyle: str) -> str:
     if gaugeStyle == "digital":
         return GAUGE_DIGITAL_BG
+    if gaugeStyle == "jdm":
+        return GAUGE_JDM_BG
+    if gaugeStyle == "telemetry":
+        return GAUGE_TELEMETRY_BG
     return _analogSpec(gaugeStyle).faceColor
 
 
 def defaultFontFamily(gaugeStyle: str) -> str:
-    if gaugeStyle == "digital":
+    if gaugeStyle in ("digital", "jdm", "telemetry"):
         return "Consolas"
     return _analogSpec(gaugeStyle).fontFamily
 
@@ -354,6 +402,7 @@ def _drawAnalog(canvas: tk.Canvas, cx: float, cy: float, radius: float, count: i
         canvas, cx, cy, faceRadius, gdiMax, spec.tickColor, effectiveNumber, effectiveFont, thin=spec.thinTicks,
         warnThreshold=warnThreshold, criticalThreshold=criticalThreshold, zoneMode=zoneMode,
         warnColor=GAUGE_YELLOWZONE, criticalColor=GAUGE_REDZONE, accentColor=effectiveAccent,
+        angleStart=spec.angleStart, angleSweep=spec.angleSweep,
     )
 
     canvas.create_text(
@@ -362,17 +411,162 @@ def _drawAnalog(canvas: tk.Canvas, cx: float, cy: float, radius: float, count: i
         fill=effectiveNumber, font=(effectiveFont, max(int(faceRadius * spec.labelFontRatio), 7), "bold"), anchor="center",
     )
 
-    pct = min(count / gdiMax, 1.0)
-    _drawNeedle(
-        canvas, cx, cy, _angleFor(pct), faceRadius * spec.needleLengthRatio, needleStyle,
-        effectiveNeedle, spec.needleTailColor, effectiveAccent, needleThickness,
-    )
-    _drawHub(canvas, cx, cy, faceRadius, spec.hubRingColor, spec.hubCapColor, effectiveDial)
-
+    # Drawn before the needle so the needle passes in front of it, not on top.
     canvas.create_text(
         cx, cy + faceRadius * 0.45,
         text=str(count),
         fill=effectiveNumber, font=(effectiveFont, max(int(faceRadius * spec.numberFontRatio), 8), "bold"), anchor="center",
+    )
+
+    pct = min(count / gdiMax, 1.0)
+    _drawNeedle(
+        canvas, cx, cy, _angleFor(pct, spec.angleStart, spec.angleSweep), faceRadius * spec.needleLengthRatio,
+        needleStyle, effectiveNeedle, spec.needleTailColor, effectiveAccent, needleThickness,
+    )
+    _drawHub(canvas, cx, cy, faceRadius, spec.hubRingColor, spec.hubCapColor, effectiveDial)
+
+
+def _drawJdmBar(canvas: tk.Canvas, cx: float, cy: float, halfWidth: float, halfHeight: float,
+                  count: int, gdiMax: int, warnThreshold: int, criticalThreshold: int,
+                  numberColor: str, dialColor: str, needleColor: str, accentColor: str,
+                  zoneMode: str, fontFamily: str) -> None:
+    """JDM-cluster bar tachometer: a straight horizontal bar of stacked segments that fills
+    from left to right as the count rises — no arc, no needle, no curvature."""
+    effectiveDial = GAUGE_JDM_BG if dialColor == "auto" else dialColor
+    effectiveNumber = GAUGE_JDM_NUMBER if numberColor == "auto" else numberColor
+    effectiveNeedle = defaultNeedleColor("jdm") if needleColor == "auto" else needleColor
+    effectiveAccent = effectiveNeedle if accentColor == "auto" else accentColor
+    effectiveFont = "Consolas" if fontFamily == "auto" else fontFamily
+    scale = min(halfWidth, halfHeight)
+    canvas.create_rectangle(
+        cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight, fill=effectiveDial, outline="",
+    )
+
+    pct = min(count / gdiMax, 1.0)
+    warnPct = warnThreshold / gdiMax if warnThreshold else None
+    criticalPct = criticalThreshold / gdiMax if criticalThreshold else None
+
+    barLeft = cx - halfWidth * 0.85
+    barRight = cx + halfWidth * 0.85
+    barTop = cy - halfHeight * 0.55
+    barBottom = cy - halfHeight * 0.05
+    barWidthTotal = barRight - barLeft
+
+    segments = 30
+    gap = max(barWidthTotal / segments * 0.12, 1)
+    for i in range(segments):
+        segPct0 = i / segments
+        segPct1 = (i + 1) / segments
+        segLeft = barLeft + segPct0 * barWidthTotal
+        segRight = barLeft + segPct1 * barWidthTotal
+        if segPct0 < pct:
+            if zoneMode == "mono":
+                color = effectiveAccent
+            elif criticalPct is not None and segPct0 >= criticalPct:
+                color = GAUGE_REDZONE
+            elif warnPct is not None and segPct0 >= warnPct:
+                color = GAUGE_YELLOWZONE
+            else:
+                color = GAUGE_JDM_BAR_LIT
+        else:
+            color = GAUGE_JDM_BAR_UNLIT
+        canvas.create_rectangle(segLeft + gap, barTop, segRight - gap, barBottom, fill=color, outline="")
+
+    majorStep = max(gdiMax // 9, 1)
+    labelY = barBottom + halfHeight * 0.12
+    tick = 0
+    while tick <= gdiMax:
+        tickPct = tick / gdiMax
+        labelX = barLeft + tickPct * barWidthTotal
+        canvas.create_text(
+            labelX, labelY, text=str(tick // 1000), fill=effectiveNumber,
+            font=(effectiveFont, max(int(scale * 0.16), 8), "bold"), anchor="n",
+        )
+        tick += majorStep
+
+    canvas.create_text(
+        cx, cy + halfHeight * 0.55, text=str(count), fill=effectiveNumber,
+        font=(effectiveFont, max(int(scale * 0.32), 10), "bold"), anchor="center",
+    )
+    canvas.create_text(
+        cx, cy + halfHeight * 0.85, text="GDI x1000", fill=effectiveNumber,
+        font=(effectiveFont, max(int(scale * 0.11), 7)), anchor="center",
+    )
+
+
+def _blendRgb(colorA: str, colorB: str, t: float) -> str:
+    ar, ag, ab = _hexToRgb(colorA)
+    br, bg, bb = _hexToRgb(colorB)
+    t = max(0.0, min(t, 1.0))
+    return "#%02x%02x%02x" % (int(ar + (br - ar) * t), int(ag + (bg - ag) * t), int(ab + (bb - ab) * t))
+
+
+def _drawTelemetryBar(canvas: tk.Canvas, cx: float, cy: float, halfWidth: float, halfHeight: float,
+                        count: int, gdiMax: int, warnThreshold: int, criticalThreshold: int,
+                        numberColor: str, dialColor: str, needleColor: str, accentColor: str,
+                        zoneMode: str, fontFamily: str) -> None:
+    """Sim-racing telemetry HUD: a row of shift-light LEDs above a gradient bar-graph
+    (cool colors at low values, warm near the redline) with a big digital readout below."""
+    effectiveDial = GAUGE_TELEMETRY_BG if dialColor == "auto" else dialColor
+    effectiveNumber = GAUGE_TELEMETRY_NUMBER if numberColor == "auto" else numberColor
+    effectiveNeedle = defaultNeedleColor("telemetry") if needleColor == "auto" else needleColor
+    effectiveAccent = effectiveNeedle if accentColor == "auto" else accentColor
+    effectiveFont = "Consolas" if fontFamily == "auto" else fontFamily
+    mono = zoneMode == "mono"
+    scale = min(halfWidth, halfHeight)
+    canvas.create_rectangle(
+        cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight, fill=effectiveDial, outline="",
+    )
+
+    pct = min(count / gdiMax, 1.0)
+    warnPct = warnThreshold / gdiMax if warnThreshold else 0.6
+    criticalPct = criticalThreshold / gdiMax if criticalThreshold else 0.85
+
+    # Shift-light LED row across the top, lighting up left-to-right as the value climbs.
+    ledCount = 8
+    ledY = cy - halfHeight * 0.72
+    ledRadius = scale * 0.09
+    ledSpan = halfWidth * 1.7
+    litLeds = round(pct * ledCount)
+    ledOnColor = effectiveAccent if mono else GAUGE_TELEMETRY_LED_ON
+    for i in range(ledCount):
+        ledX = cx - ledSpan / 2 + ledSpan * (i + 0.5) / ledCount
+        color = ledOnColor if i < litLeds else GAUGE_TELEMETRY_LED_OFF
+        canvas.create_oval(
+            ledX - ledRadius, ledY - ledRadius, ledX + ledRadius, ledY + ledRadius, fill=color, outline="",
+        )
+
+    # Gradient bar-graph: each segment's height grows progressively left to right. In mono
+    # mode it's a single-hue gradient (dim-to-bright accent); otherwise the usual cool-to-warm scheme.
+    barBottom = cy + halfHeight * 0.02
+    maxBarHeight = halfHeight * 0.42
+    barLeft, barRight = cx - halfWidth * 0.9, cx + halfWidth * 0.9
+    segments = 60
+    segWidth = (barRight - barLeft) / segments
+    for i in range(segments):
+        segPct = (i + 0.5) / segments
+        barHeight = maxBarHeight * (0.12 + 0.88 * segPct)
+        if segPct <= pct:
+            if mono:
+                color = _blendRgb("#000000", effectiveAccent, 0.35 + 0.65 * segPct)
+            elif segPct >= criticalPct:
+                color = _blendRgb(GAUGE_TELEMETRY_BAR_MID, GAUGE_TELEMETRY_BAR_HIGH, (segPct - criticalPct) / max(1 - criticalPct, 0.01))
+            elif segPct >= warnPct:
+                color = _blendRgb(GAUGE_TELEMETRY_BAR_LOW, GAUGE_TELEMETRY_BAR_MID, (segPct - warnPct) / max(criticalPct - warnPct, 0.01))
+            else:
+                color = _blendRgb(GAUGE_TELEMETRY_BAR_LOW, GAUGE_TELEMETRY_BAR_MID, segPct / max(warnPct, 0.01))
+        else:
+            color = GAUGE_TELEMETRY_BAR_UNLIT
+        x0 = barLeft + i * segWidth
+        canvas.create_rectangle(x0, barBottom - barHeight, x0 + segWidth * 0.7, barBottom, fill=color, outline="")
+
+    canvas.create_text(
+        cx, cy + halfHeight * 0.42, text=str(count), fill=effectiveNumber,
+        font=(effectiveFont, max(int(scale * 0.4), 12), "bold"), anchor="center",
+    )
+    canvas.create_text(
+        cx, cy + halfHeight * 0.78, text="GDI x1000", fill=effectiveNumber,
+        font=(effectiveFont, max(int(scale * 0.11), 7)), anchor="center",
     )
 
 
@@ -417,6 +611,15 @@ def _drawDigital(canvas: tk.Canvas, cx: float, cy: float, radius: float, count: 
 
 # ── Public entry point ───────────────────────────────────────────────────────────
 
+# Styles that are a wide horizontal band rather than a circular dial — the caller (window
+# sizing/aspect-lock code) uses this to avoid forcing a square container for them.
+RECTANGULAR_GAUGE_STYLES = {"jdm", "telemetry"}
+
+
+def isRectangularStyle(gaugeStyle: str) -> bool:
+    return gaugeStyle in RECTANGULAR_GAUGE_STYLES
+
+
 def draw(canvas: tk.Canvas, width: int, height: int, count: int, gdiMax: int,
           warnThreshold: int, criticalThreshold: int, gaugeStyle: str, needleStyle: str,
           needleColor: str = "auto", zoneMode: str = "multicolor", accentColor: str = "auto",
@@ -429,6 +632,19 @@ def draw(canvas: tk.Canvas, width: int, height: int, count: int, gdiMax: int,
         return
 
     cx, cy = width / 2, height / 2
+
+    if gaugeStyle == "jdm":
+        _drawJdmBar(
+            canvas, cx, cy, width * 0.47, height * 0.47, count, gdiMax,
+            warnThreshold, criticalThreshold, numberColor, dialColor, needleColor, accentColor, zoneMode, fontFamily,
+        )
+        return
+    if gaugeStyle == "telemetry":
+        _drawTelemetryBar(
+            canvas, cx, cy, width * 0.47, height * 0.47, count, gdiMax,
+            warnThreshold, criticalThreshold, numberColor, dialColor, needleColor, accentColor, zoneMode, fontFamily,
+        )
+        return
     # Always a perfect circle sized to the smaller dimension (never stretched into an
     # ellipse), just with a thinner margin so it fills as much of that dimension as possible.
     radius = min(width, height) * 0.47
