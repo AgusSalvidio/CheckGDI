@@ -66,6 +66,30 @@ def addRadioGroup(parent: tk.Widget, variable: tk.Variable, options: Iterable[tu
         ).pack(fill="x")
 
 
+def addDropdown(parent: tk.Widget, variable: tk.Variable, options: Iterable[tuple[str, str]],
+                 command: Callable[[], None]) -> None:
+    """Same purpose as addRadioGroup (pick one of N values) but as a compact dropdown
+    instead of a stacked list of bullets — better for longer option lists."""
+    optionsList = list(options)
+    labelByValue = dict(optionsList)
+    valueByLabel = {label: value for value, label in optionsList}
+    selectedLabel = tk.StringVar(value=labelByValue.get(variable.get(), optionsList[0][1]))
+
+    def onPick(pickedLabel: str) -> None:
+        variable.set(valueByLabel[pickedLabel])
+        command()
+
+    row = tk.Frame(parent, bg=BG_DARK)
+    row.pack(fill="x", padx=16)
+    menu = tk.OptionMenu(row, selectedLabel, *[label for _, label in optionsList], command=onPick)
+    menu.configure(
+        bg=BG_CARD, fg=FG_HEADER, activebackground=BG_CARD, activeforeground=FG_HEADER,
+        font=("Consolas", 9), relief="flat", highlightthickness=0, anchor="w",
+    )
+    menu["menu"].configure(bg=BG_CARD, fg=FG_HEADER, font=("Consolas", 9))
+    menu.pack(fill="x", pady=(0, 6))
+
+
 def addColorPickerRow(parent: tk.Widget, title: str, resolve: Callable[[], str],
                        getRaw: Callable[[], str], setRaw: Callable[[str], None],
                        onChange: Callable[[], None], dialogOwner: tk.Misc) -> None:

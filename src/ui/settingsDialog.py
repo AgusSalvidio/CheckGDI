@@ -7,7 +7,7 @@ import tkinter as tk
 from typing import Callable
 
 from src.ui.palette import BG_DARK, BG_CARD, BAR_BG, FG_HEADER, FG_MUTED, COLOR_RED
-from src.ui.widgets import addRadioGroup, addColorPickerRow, addSliderRow, addFontPickerRow
+from src.ui.widgets import addDropdown, addColorPickerRow, addSliderRow, addFontPickerRow
 from src.ui import gaugeColors
 
 FIXED_SIM_RESOLUTION = 10
@@ -174,16 +174,21 @@ class SettingsDialog:
 
         vistaFrame = tk.Frame(content, bg=BG_DARK)
         self._sectionTitle(vistaFrame, "Vista")
-        addRadioGroup(vistaFrame, viewVar, (("bars", "Barras"), ("gauge", "Aguja (RPM)")), applyView)
+        addDropdown(vistaFrame, viewVar, (("bars", "Barras"), ("gauge", "Aguja (RPM)")), applyView)
 
         perfilesFrame = tk.Frame(content, bg=BG_DARK)
         self._buildProfilesTab(perfilesFrame)
 
         disenoFrame = tk.Frame(content, bg=BG_DARK)
         self._sectionTitle(disenoFrame, "Diseño del tacómetro")
-        addRadioGroup(
+        addDropdown(
             disenoFrame, gaugeVar,
-            (("classic", "Clásico (cromado)"), ("retro", "Retro (marfil)"), ("digital", "Digital (anillo LCD)")),
+            (
+                ("classic", "Clásico"), ("retro", "Retro"),
+                ("veglia", "Veglia"), ("ferrari", "Italiano"),
+                ("aston", "Británico"), ("jdm", "JDM"), ("telemetry", "Telemetría"),
+                ("digital", "Digital"),
+            ),
             applyGauge,
         )
         addColorPickerRow(
@@ -200,7 +205,7 @@ class SettingsDialog:
 
         agujaFrame = tk.Frame(content, bg=BG_DARK)
         self._sectionTitle(agujaFrame, "Aguja")
-        addRadioGroup(
+        addDropdown(
             agujaFrame, needleVar,
             (("classic", "Clásica"), ("sport", "Deportiva"), ("twin", "Doble riel"), ("line", "Línea"), ("slim", "Fina (moto)")),
             applyNeedle,
@@ -213,7 +218,7 @@ class SettingsDialog:
 
         zonasFrame = tk.Frame(content, bg=BG_DARK)
         self._sectionTitle(zonasFrame, "Zonas de color")
-        addRadioGroup(zonasFrame, zoneVar, (("multicolor", "Multicolor"), ("mono", "Monocromo")), applyZoneMode)
+        addDropdown(zonasFrame, zoneVar, (("multicolor", "Multicolor"), ("mono", "Monocromo")), applyZoneMode)
         addColorPickerRow(
             zonasFrame, "Acento monocromo", lambda: gaugeColors.resolvedAccentColor(context),
             context.accentColor, context.setAccentColor, self._onChange, popup,
@@ -272,11 +277,46 @@ class SettingsDialog:
             context.setActiveProfile(profileVar.get())
             self.reopen()
 
-        addRadioGroup(
+        addDropdown(
             parent, profileVar,
             [(name, name) for name in context.profileNames()],
             applyProfile,
         )
+
+        tk.Label(
+            parent, text="Renombrar perfil actual", bg=BG_DARK, fg=FG_MUTED,
+            font=("Consolas", 8), anchor="w", padx=14,
+        ).pack(fill="x", pady=(10, 2))
+
+        renameRow = tk.Frame(parent, bg=BG_DARK)
+        renameRow.pack(fill="x", padx=14, pady=(0, 2))
+
+        renameVar = tk.StringVar(value=context.activeProfile())
+        tk.Entry(
+            renameRow, textvariable=renameVar, bg=BG_CARD, fg=FG_HEADER, insertbackground=FG_HEADER,
+            relief="flat", font=("Consolas", 9),
+        ).pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        renameWarningLabel = tk.Label(
+            parent, text="Ya existe un perfil con ese nombre",
+            bg=BG_DARK, fg=COLOR_RED, font=("Consolas", 8), anchor="w", padx=14,
+        )
+
+        def renameActiveProfile() -> None:
+            newName = renameVar.get().strip()
+            if not newName or newName == context.activeProfile():
+                return
+            if newName in context.profileNames():
+                renameWarningLabel.pack(fill="x", pady=(0, 4), after=renameRow)
+                return
+            context.renameProfile(context.activeProfile(), newName)
+            self.reopen()
+
+        tk.Button(
+            renameRow, text="✎ Renombrar", command=renameActiveProfile, bg=BG_CARD, fg=FG_HEADER,
+            activebackground=BG_CARD, activeforeground=FG_HEADER, font=("Consolas", 9),
+            relief="flat", padx=8,
+        ).pack(side="left")
 
         tk.Label(
             parent, text="Nuevo perfil a partir del actual", bg=BG_DARK, fg=FG_MUTED,

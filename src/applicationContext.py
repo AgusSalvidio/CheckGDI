@@ -251,6 +251,18 @@ class ApplicationContext:
         self._activeProfile = name
         self._persistSettings()
 
+    def renameProfile(self, oldName: str, newName: str) -> None:
+        newName = newName.strip()
+        if not newName or oldName not in self._profiles or newName == oldName or newName in self._profiles:
+            return
+        # dict insertion order is preserved on rename, so rebuild it to keep the profile's position.
+        self._profiles = {
+            (newName if key == oldName else key): value for key, value in self._profiles.items()
+        }
+        if self._activeProfile == oldName:
+            self._activeProfile = newName
+        self._persistSettings()
+
     def deleteProfile(self, name: str) -> None:
         if name not in self._profiles or len(self._profiles) <= 1:
             return
