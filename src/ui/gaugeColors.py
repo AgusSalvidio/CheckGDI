@@ -23,3 +23,8 @@ def resolvedNumberColor(context) -> str:
 def resolvedDialColor(context) -> str:
     color = context.dialColor()
     return color if color != "auto" else gaugeWidget.defaultDialColor(context.gaugeStyle())
+
+
+def resolvedFontFamily(context) -> str:
+    font = context.fontFamily()
+    return font if font != "auto" else gaugeWidget.defaultFontFamily(context.gaugeStyle())

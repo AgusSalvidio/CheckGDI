@@ -7,6 +7,21 @@ from typing import Callable, Iterable
 
 from src.ui.palette import BG_DARK, BG_CARD, FG_HEADER, FG_MUTED
 
+# Curated shortlist of fonts that read well at small dashboard sizes and ship with Windows,
+# so the picker doesn't have to enumerate every font installed on the machine.
+FONT_CHOICES = (
+    ("auto", "Auto (según estilo)"),
+    ("Consolas", "Consolas"),
+    ("Bahnschrift", "Bahnschrift"),
+    ("Segoe UI", "Segoe UI"),
+    ("Segoe UI Semibold", "Segoe UI Semibold"),
+    ("Trebuchet MS", "Trebuchet MS"),
+    ("Georgia", "Georgia"),
+    ("Courier New", "Courier New"),
+    ("Arial Black", "Arial Black"),
+    ("Impact", "Impact"),
+)
+
 
 def addCollapsible(parent: tk.Widget, title: str, expanded: bool = False) -> tk.Frame:
     header = tk.Frame(parent, bg=BG_DARK)
@@ -111,3 +126,29 @@ def addSliderRow(parent: tk.Widget, title: str, getValue: Callable[[], float],
         command=onSliderChange, bg=BG_DARK, fg=FG_HEADER, troughcolor=BG_CARD,
         highlightthickness=0, activebackground=BG_CARD, font=("Consolas", 8), showvalue=True,
     ).pack(fill="x")
+
+
+def addFontPickerRow(parent: tk.Widget, title: str, getRaw: Callable[[], str],
+                      setRaw: Callable[[str], None], onChange: Callable[[], None]) -> None:
+    tk.Label(
+        parent, text=title, bg=BG_DARK, fg=FG_HEADER,
+        font=("Consolas", 9), anchor="w", padx=16,
+    ).pack(fill="x", pady=(6, 2))
+
+    labelByValue = dict(FONT_CHOICES)
+    valueByLabel = {label: value for value, label in FONT_CHOICES}
+    selectedLabel = tk.StringVar(value=labelByValue.get(getRaw(), labelByValue["auto"]))
+
+    def onPick(pickedLabel: str) -> None:
+        setRaw(valueByLabel[pickedLabel])
+        onChange()
+
+    row = tk.Frame(parent, bg=BG_DARK)
+    row.pack(fill="x", padx=16)
+    menu = tk.OptionMenu(row, selectedLabel, *[label for _, label in FONT_CHOICES], command=onPick)
+    menu.configure(
+        bg=BG_CARD, fg=FG_HEADER, activebackground=BG_CARD, activeforeground=FG_HEADER,
+        font=("Consolas", 9), relief="flat", highlightthickness=0, anchor="w",
+    )
+    menu["menu"].configure(bg=BG_CARD, fg=FG_HEADER, font=("Consolas", 9))
+    menu.pack(fill="x")

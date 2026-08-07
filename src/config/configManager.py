@@ -87,5 +87,8 @@ class ConfigManager:
     def dialColor(self) -> str:
         return self._str("GAUGE_DIAL_COLOR", "auto")
 
+    def fontFamily(self) -> str:
+        return self._str("GAUGE_FONT_FAMILY", "auto")
+
     def needleThickness(self) -> float:
         return self._float("NEEDLE_THICKNESS", 1.0, NEEDLE_THICKNESS_MIN, NEEDLE_THICKNESS_MAX)
